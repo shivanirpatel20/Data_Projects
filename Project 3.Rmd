@@ -1,0 +1,330 @@
+---
+title: "STAT 3301"
+author: "Project 3"
+date: "Shivani Patel (patel.3999)"
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r include=FALSE, eval-FALSE}
+library(tidyverse)
+library(readr)
+library(leaps)
+library(MASS)
+library(gridExtra)
+concrete <- read_csv( "/Users/shivanipatel/Downloads/concrete_data.csv")
+```
+
+#### Instructions
+
+Use R Markdown to prepare your answers to the questions posed in the parts below. Unlike a usual homework assignment, where an answer to a question might include some R output and numerical values from calculations, most questions below require written responses in sentence/paragraph form. For these questions, you will not receive full credit for simply providing R output or the
+result of calculations: you need to clearly describe what you have done and provide appropriate discussion and interpretation. You can include small amounts of R output and calculations in R in your responses, but these should be **in support of your written answers** and are not a substitute for a full written response. Do not include R code/output that is unrelated to your written answers. Your write-up should be easy to read and appropriately formatted; plots and graphs should be appropriately sized, with easy to read labels and symbols; numeric results should be presented in a way that is easy to read.
+
+
+#### Data Description
+
+Concrete is one of the most popular building materials in the world. It is a composite material, made from a mixture of other materials such as cement, water, fine aggregate (such as sand), and coarse aggregate (such as gravel). One advantage of concrete is that over time the chemical reactions in the mixture complete, causing it to harden and gain strength. The data set "concrete_data.csv" on Carmen contains measurements of 1030 samples of concrete from Yeh (1998). The following variables are included in the data set:
+
+
+| Variable Name | Description |
+| ------------: | :-------------------------------------------------------------------- |
+| `cement` | The amount of cement in the sample (in $kg/m^3$)  |
+| `slag` | The amount of blast furnace slag in the sample (in $kg/m^3$) |
+| `flyash` | The amount of fly ash in the sample (in $kg/m^3$) |
+| `water` | The amount of water in the sample (in $kg/m^3$) |
+| `superplasticizer` | The amount of superplasticizer in the sample (in $kg/m^3$) |
+| `coarseaggregate` | The amount of coarse aggregate in the sample (in $kg/m^3$) |
+| `fineaggregate` | The amount of fine aggregate in the sample (in $kg/m^3$) |
+| `age` | The age of the sample (in days) |
+| `csMPa` | The compressive strength of the sample (in MPa)|
+
+
+#### Questions to Answer
+
+1.Slag, flyash, and superplasticizer are all optional elements in concrete. As you did in the previous project, create a new binary variable in the data set called catflyash which has a value of 1 if there was some amount of flyash in the mixture and a value of 0 otherwise. Also create a new binary variable called catsuper that has a value of 1 if there was some amount of superplasticizer in the mixture and a value of 0 otherwise, and create a new binary variable in the data set called catslag which has a value of 1 if there was some amount of slag in the mixture and a value of 0 otherwise. For this question you will investigate potential interactions between these binary variables and the other mixture elements (you don't have to consider interactions with age) or between the binary variables themselves. Specifically, you need to find **four** two-way interaction effects that you think are useful in explaining additional variability in concrete strength compared to a model that already contains the main effects of cement, water, coarseaggregate, fineaggregate, age, catslag, catflyash, and catsuper. For each interaction effect you chose, you need to justify its usefulness both graphically and numerically. For the graph, you must point to specific features of the graph that illustrate a potentially useful interaction effect. For the numerical justification, you should perform a formal hypothesis test or give a solid argument based on summary statistics or criterion measures. Make sure to specify any parameters you are using for hypothesis tests.
+
+
+
+##### solution to Q1
+
+Main model:
+```{r}
+#creating binary variables
+concrete$catflyash = factor(as.numeric(concrete$flyash > 0))
+concrete$catslag = factor(as.numeric(concrete$slag > 0))
+concrete$catsuper = factor(as.numeric(concrete$superplasticizer > 0))
+
+
+
+MainMod <- lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper, data=concrete)
+summary(MainMod)
+
+RSS.mainMod <- sum(resid(MainMod)^2)
+```
+
+The main model to estimate csMPa using the predictors is 
+
+$\beta_0 + \beta_1X_{cement} + \beta_2X_{water} + \beta_3X_{coarseaggregate} + \beta_4X_{fineaggregate} + \beta_5X_{age} + \beta_6U_{catslag} + \beta_7U_{catflysh} + \beta_8U_{catsuper} + e_i$
+
+were $e_i$ follows  iid ~ N(0,$\sigma^2$)
+
+Interactions:
+
+```{r, echo=FALSE}
+concrete %>% ggplot(aes(x=cement, y=csMPa, color=catslag)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catslag), size=.75) #plot to judge catslag:cement should be sig
+
+concrete %>% ggplot(aes(x=water, y=csMPa, color=catslag)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catslag), size=.75) #plot to judge catslag:water should be sig
+
+concrete %>% ggplot(aes(x=coarseaggregate, y=csMPa, color=catslag)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catslag), size=.75) #plot to judge catslag:coarseaggregate
+
+concrete %>% ggplot(aes(x=fineaggregate, y=csMPa, color=catslag)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catslag), size=.75) #plot to judge catslag:fineagreegate
+
+
+
+concrete %>% ggplot(aes(x=cement, y=csMPa, color=catflyash)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catflyash), size=.75) #plot to judge catflyash:cement
+
+concrete %>% ggplot(aes(x=water, y=csMPa, color=catflyash)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catflyash), size=.75) #plot to judge catflyash:water
+
+concrete %>% ggplot(aes(x=coarseaggregate, y=csMPa, color=catflyash)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catflyash), size=.75) #plot to judge catflyash:coarseaggregate
+
+concrete %>% ggplot(aes(x=fineaggregate, y=csMPa, color=catflyash)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catflyash), size=.75) #plot to judge catflyash:fineagreegate
+
+
+
+
+concrete %>% ggplot(aes(x=cement, y=csMPa, color=catsuper)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catsuper), size=.75) #plot to judge catflyash:cement
+
+concrete %>% ggplot(aes(x=water, y=csMPa, color=catsuper)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catsuper), size=.75) #plot to judge catflyash:water
+
+concrete %>% ggplot(aes(x=coarseaggregate, y=csMPa, color=catsuper)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catsuper), size=.75) #plot to judge catflyash:coarseaggregate
+
+concrete %>% ggplot(aes(x=fineaggregate, y=csMPa, color=catsuper)) + geom_point() + geom_smooth(method="lm", se=F, aes(color=catsuper), size=.75) #plot to judge catsuper:fineagreegate
+```
+
+```{r, echo=FALSE}
+#comparing interactions for binary variables
+concrete %>% ggplot(aes(x=catsuper, y=csMPa, color=catflyash)) + geom_boxplot() + geom_smooth(method="lm", se=F, aes(color=catflyash), size=.75) #plot to judge catsuper:catflyash should be sig
+
+concrete %>% ggplot(aes(x=catsuper, y=csMPa, color=catslag)) + geom_boxplot() + geom_smooth(method="lm", se=F, aes(color=catslag), size=.75) #plot to judge catsuper:catslag
+
+concrete %>% ggplot(aes(x=catflyash, y=csMPa, color=catslag)) + geom_boxplot() + geom_smooth(method="lm", se=F, aes(color=catslag), size=.75) #plot to judge catflyash:catslag, should be sig
+
+
+```
+
+Observing graphs can be a bit challanging because we start to heavily rely on the sample size or presence of observations for each predictor.
+
+Looking at the plots for the presence of the catslag, catflyash, or catsuper when plotted against the respective term we want to view the interaction of, we see that most of the slopes are vaguely similar if we don't overthink. the two plots that stood out to me where catslag and fineaggregate plotted together, and the catsuper and water plotted together, as well as the catsuper and fineaggregate plotted together. The slopes on each graph were very different.
+
+Looking at the plots for the interactions of the binary variables against each other, the box plot of catsuper and catflyash plotted stood out to me, as it's clear there is a variation difference when there is a presencce of catflyash and not between the concrete samples with catsuper and not. The medians also seem very different as well.
+
+
+
+```{r, echo=FALSE}
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:cement, data=concrete))
+ #signif p value is .001276
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:water, data=concrete)) #signif p value is 8.48e-05
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:coarseaggregate, data=concrete)) # not signif
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:fineaggregate, data=concrete)) #not signif
+
+
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catflyash:cement, data=concrete)) #not signif
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catflyash:water, data=concrete)) #not signif
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catflyash:coarseaggregate, data=concrete)) #not signif
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catflyash:fineaggregate, data=concrete)) # pvalue is .007 (close but not the fourth least)
+
+
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:cement, data=concrete)) #not signif
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:water, data=concrete)) #not as signif 
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:coarseaggregate, data=concrete)) #not signif
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:fineaggregate, data=concrete)) #not signif
+
+
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:catflyash, data=concrete)) #pvalue is .000487
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:catslag, data=concrete)) #not as signif p value is close but (.271)
+
+summary(lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catflyash:catslag, data=concrete)) #pvalue is .00684
+
+```
+
+From trying to fit all the seperate two way interactions of each binary predictor and cement,water,coarseaggregate, and fineaggregate, the hypothesis tests for the interactions of
+
+a. catslag:cement
+
+b. catslag:water
+
+c. catsuper:catflyash
+
+d. catsuper:water
+
+
+The 2 sided p values for the first 3 seperate interactions were less than any reasonable $\alpha$ levels. Meaning that the t tests (hypothesis tests testing if the interaction coefficent is 0 or not) were significant. 
+
+Though the last interaction (catsuper:water) did not have as low as a pvalue as the first three, I could not ignore the difference in slopes it's graph provided.
+
+
+And by observing the graphs of each interaction, 
+
+```{r, echo=FALSE}
+CatSlagCement <- lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:cement, data=concrete)
+
+CatSlagWater <- lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:water, data=concrete)
+
+CatSuperCatFlyash <- lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:catflyash, data=concrete)
+
+CatSuperWater <- lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catsuper:water, data=concrete)
+
+RSS.CatSlagCement <- sum(resid(CatSlagCement)^2)
+RSS.CatSlagWater <- sum(resid(CatSlagWater)^2)
+RSS.CatSuperCatFlyash <- sum(resid(CatSuperCatFlyash)^2)
+RSS.CatSuperWater <- sum(resid(CatSuperWater)^2)
+
+summary(CatSlagCement)$sigma^2
+summary(CatSlagWater)$sigma^2
+summary(CatSuperCatFlyash)$sigma^2
+summary(CatSuperWater)$sigma^2
+```
+
+
+RSS differences: The main effects model RSS was about 110000
+
+
+a. RSS for the model including catslag:cement interaction was: 108885
+b. RSS for the model including catslag:water interaction was: 108345
+c. RSS for the model including catsuper:catflyash interaction was: 108695
+d. RSS for the model including catsuper:water interaction was: 109448
+
+The RSS for all the interactions was less than the main effects model by a large amount. This means adding the four different interactions seperately helped explain additional variablility in csMPa beyond of what was already explain using the main effects model. the four interactions were useful.
+
+$\sigma^2$ differences: The main effects model $\sigma^2$ was 107.74
+
+a. $\sigma^2$ for the model including catslag:cement interaction was: 106.75
+
+b. $\sigma^2$ for the model including catslag:water interaction was: 106.22
+
+c. $\sigma^2$ for the model including catsuper:catflyash interaction was: 106.56
+
+d. $\sigma^2$ for the model including catsuper:water interaction was: 107.3021
+
+
+The $\sigma^2$ for all the interactions was less than the main effects model by a large amount(with the exception for catsuper interaction with water). This means adding the four different interactions seperately helped explain additional variablility in csMPa beyond of what was already explain using the main effects model. the four interactions were useful.
+
+
+2.For this question you will consider models that include main effects of cement, water, coarseaggregate, fineaggregate, age, catslag, catflyash, and catsuper, as well as the four interaction effects you found in question 1. That gives a total of 12 potential effects terms in addition to the intercept. Using any of the methods learned in the last part of the course (cross-validation, stepwise regression, best subsets regression, etc.) choose **two** models from among those containing at least one of these terms that you feel are optimal. You do not have to consider transformations or other interactions. In paragraph form, describe the process that you went through to obtain those two models. Provide estimated mean functions of both models and discuss their similarities and differences.
+
+
+###### Solution to Q2
+
+The 12 potential effects are: cement, water, coarseaggregate, fineaggregate, age, catslag, catflyash, catsuper,  catslag:cement, catslag:water, catsuper:catflyash, and catsuper:water
+
+Will use a mix of forward, backward, and stepwise regression first to have three candidates
+```{r, echo=FALSE}
+
+null = lm(csMPa ~ 1, data=concrete)
+full = lm(csMPa ~cement + water + coarseaggregate + fineaggregate + age+ catslag+ catflyash + catsuper + catslag:cement + catslag:water + catsuper:catflyash + catsuper:water, data=concrete)
+n=dim(concrete)[1]
+
+#forward selection  using AIC
+stepAIC(null, scope=list(upper = full), direction = "forward", k=2)
+# returns lm(formula = csMPa ~ cement + catsuper + age + catslag + water + fineaggregate + catflyash + coarseaggregate + catslag:water + cement:catslag + catslag:catflyash + catsuper:catflyash, data = concrete)
+
+#backward selection using AIC
+stepAIC(full, direction = "backward", k=2)
+#returns lm(formula = csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:cement + catslag:water + catsuper:catflyash + catflyash:catslag, data = concrete)
+
+#stepwise regression using AIC
+stepAIC(null, scope = list(upper = full), direction = "both", k=2)
+#returned lm(formula = csMPa ~ cement + catsuper + age + catslag + water + fineaggregate + catflyash + coarseaggregate + catslag:water + cement:catslag + catslag:catflyash + catsuper:catflyash, data = concrete)
+```
+
+now using exhaustive search
+```{r, echo=FALSE}
+regout = regsubsets(csMPa ~ ., data=concrete, nvmax = 12)
+summary(regout)$outmat
+
+#cement, slag, water, coarsaggregate, age, catflyash, catslag, and catsuper seemed to be most optimal
+```
+
+
+After using both the guided and exhaustive searches the two optimal models I would choose are:
+
+
+$E(csMPa | cement, water, coarseaggregate, fineaggregate, age, catslag, catflyash, catsuper) = \beta_0 + \beta_1X_{cement} + \beta_2X_{water} + \beta_3X_{coarseaggregate} + \beta_4X_{fineaggregate} + \beta_5X_{age} + \beta_6U_{catslag} + \beta_7U_{catflyash} + \beta_8U_{catsuper} + \beta_9(U_{catslag}X_{cement}) + \beta_{10}(U_{catslag}X_{water}) + \beta_{11}(U_{catsuper}U_{catflyash}) + \beta_{12}(U_{catsuper}U_{water})$
+
+
+
+$E(csMPa | cement, water, coarseaggregate, age, catslag, catsuper) = \beta_0 + \beta_1X_{cement} + \beta_2X_{water} + \beta_3X_{coarseaggregate} + \beta_4X_{age} + \beta_5U_{catslag} + \beta_6U_{catsuper} + \beta_7(U_{catslag}X_{cement}) + \beta_8(U_{catslag}X_{water})$
+
+Using the guided search, I compared all three types (foreward, backwards, and stepwise). All three of the searches gave me the same linear model to use with the least AIC.
+
+
+Using the exhaustive search, I observed which variables were most important{#Regsubsets} when using the least amount of parameters used. Flyash and fineaggregate seemed to only be necessary for our model when we want to utalize  10 or greater parameters. If the whole point is to use the least amount of paramters we are able to in our model, fineaggreagte and flyash didn't seem of much importance.
+
+Observing the seperate steps of Forward AIC Selection, I noticed that when we added the finaggregate and the catflyash variables to the model, the AIC did not decrease to the same magnitude as it did when including the other variables. It barely decreased when I included the interactions involving catflyash and catsuper and also the interaction of catsuper and water, proving that though they could be helpful, which is why both variables and the interactions are still included in the first optimal model, they are not as helpful as the other variables. 
+
+3. Use residuals plots to evaluate the two models you chose in question 2 in terms of MLR assumptions. Be sure to include the plots in your write-up and refer to specific aspects of the plots when discussing these assumptions. Based on the residuals plots and any other aspects of the two models, choose **one** model to recommend for use. Write a couple sentences summarizing how "good" the model you choose is, in terms of fit, residuals, interpretability, and/or any other relevant criteria.
+
+
+```{r, echo=FALSE}
+FinalMod1 <- lm(csMPa ~ cement + water + coarseaggregate + fineaggregate + age + catslag + catflyash + catsuper + catslag:cement + catslag:water + catsuper:catflyash + catsuper:water , data=concrete)
+
+FinalMod2 <- lm(csMPa ~ cement + water + coarseaggregate + age + catslag + catsuper + catslag:cement + catslag:water, data=concrete)
+
+#plotting residuals for Final  Model 1
+
+library(broom)
+base1 = augment(FinalMod1) %>% ggplot(aes(x = .fitted, y = .resid)) + geom_point() + 
+  xlab("fitted values") + ylab("residuals") + ggtitle("Residuals Plot for First Model Decided") +
+  theme_bw(16) + geom_hline(yintercept = 0)
+base1
+
+
+base2 = augment(FinalMod2) %>% ggplot(aes(x = .fitted, y = .resid)) + geom_point() + 
+  xlab("fitted values") + ylab("residuals") + ggtitle("Residuals Plot for Second Model Decided") +
+  theme_bw(16) + geom_hline(yintercept = 0)
+base2
+```
+
+If observed very closely we can say that the residuals for less csMPa observed is closer to 0 than the greater values of csMPa observed. This can cause a fanning effect in the plot. 
+
+The first graph though for the model:
+
+$E(csMPa | cement, water, coarseaggregate, fineaggregate, age, catslag, catflyash, catsuper) = \beta_0 + \beta_1X_{cement} + \beta_2X_{water} + \beta_3X_{coarseaggregate} + \beta_4X_{fineaggregate} + \beta_5X_{age} + \beta_6U_{catslag} + \beta_7U_{catflyash} + \beta_8U_{catsuper} + \beta_9(U_{catslag}X_{cement}) + \beta_{10}(U_{catslag}X_{water}) + \beta_{11}(U_{catsuper}U_{catflyash}) + \beta_{12}(U_{catsuper}U_{water})$
+
+has more of a fanning pattern than the second graph for the model:
+
+$E(csMPa | cement, water, coarseaggregate, age, catslag, catsuper) = \beta_0 + \beta_1X_{cement} + \beta_2X_{water} + \beta_3X_{coarseaggregate} + \beta_4X_{age} + \beta_5U_{catslag} + \beta_6U_{catsuper} + \beta_7(U_{catslag}X_{cement}) + \beta_8(U_{catslag}X_{water})$
+
+It would be best if we chose the second final model as our true final model because the fanning is less apparent and the model fits the critera of a constant variance more. Neither of these models are perfect, but this model seems best choice.
+
+From performing the different models hypothesis tests and observing how much our summary statistics change and if an interaction term helped explain additional variability, looking at interactions between variables using plots, and lastly performing exhaustive and then performing a mix of forward, backward, and stepwise regression. The canidate of a final model decided is:
+
+$E(csMPa | cement, water, coarseaggregate, age, catslag, catsuper) = \beta_0 + \beta_1X_{cement} + \beta_2X_{water} + \beta_3X_{coarseaggregate} + \beta_4X_{age} + \beta_5U_{catslag} + \beta_6U_{catsuper} + \beta_7(U_{catslag}X_{cement}) + \beta_8(U_{catslag}X_{water})$
+
+The interactions in this model all proved to be necessary and signifigant along with the hypothesis tests and difference in summary statistics. The other terms seemed signifigant when performing the exhaustive and forward,backward, stepwise regression. Lasty their residual plot fit the critera of a constant variance better than the runner up model.
+
+This model isn't perfect but with all the diagnostics and tests done, it is observed the best.
+
+
+
+
+
+
+
+#### References
+I-Cheng Yeh, "Modeling of strength of high performance concrete using artificial 
+neural networks," Cement and Concrete Research, Vol. 28, No. 12, pp. 1797-1808 (1998)
+

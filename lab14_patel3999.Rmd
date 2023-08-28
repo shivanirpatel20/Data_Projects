@@ -1,0 +1,307 @@
+---
+title: "Stat 3202 Lab 14"
+author: "Shivani patel.3999"
+date: "4/21/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+# Problem 1 
+
+A Type I error is when we wrongfully reject a correct null hypothesis
+
+Ho: $\mu=125$ grams 
+Ha: $\mu$ does not equal 125 grams
+
+Collecting a 36 sample of oranges from a grove where $\mu_{true}=125$ and $\sigma=5$ (only used to generate data and is unknown when making confidence interval)
+```{r}
+mu <- 125
+sigma <- 5
+#Ho: mu = 125
+#Ha: mu != 125 (two sided)
+alpha <- .05
+#null is correct
+
+#A type-I error is when we accidentally reject a null hypothesis, that is correct
+oranges1 <- c(126,122,129,128,133,128,119,124,134,
+              134,128,125,127,125,125,126,131,125,
+              124,124,133,126,132,131,128,124,131,
+              130,120,131,126,130,121,118,129,123)
+```
+
+# a
+
+Using r function to generate a confidence interval at significance level $\alpha=.05$ and testing with p value and rejection region as well
+
+```{r}
+# test with conf interval
+xbar <- mean(oranges1)
+sd <- sd(oranges1)
+n <- length(oranges1)
+#we assume we don't know the sigma to test hypothesis so must use t test
+t.test(oranges1, conf.level = 1-alpha, mu=125)
+# returns (125.53, 128.36) interval where 125 is not included (reject the null)
+
+#test with rejection regions
+tobs <- (xbar-125)/sqrt(sd^2/length(oranges1))
+tobs
+RR1<-qt(alpha/2, length(oranges1)-1)
+RR2<-qt(1-alpha/2, length(oranges1)-1)
+c(RR1,RR2)
+tobs>RR1 & tobs<RR2
+#returns a false meaning tobs is outside of rejection region (reject the null)
+
+#test with a pvalue
+pvalue <- pt(tobs, length(oranges1)-1, lower.tail=FALSE)*2
+pvalue
+pvalue < alpha
+#returns a true so pvalue is less than alpha (reject the null)
+```
+
+With all the tests done, it is practical to say that we should reject the null hypothesis, but the null hypothesis is actually true, therefore we are making a type I error
+
+# b
+Monte carlo simulation to:
+
+visualize sampling distribution of p value
+```{r}
+orange_tester <- function(n, mu, sigma, alpha){
+  x <- rnorm(n,mu,sigma)
+  out <- t.test(x, conf.level=1-alpha, mu=mu)
+  return(out$p.value)
+}
+pvalues <- replicate(50000, orange_tester(n=length(oranges1), mu=125, sigma=5, alpha=.05))
+hist(pvalues, main="Sampling Distriburion of p values", xlab="p values")
+
+```
+the sampling distribution of the p values seems to be uniform
+
+See how frequently the type I error is made
+```{r}
+rejectPvalue <- c()
+alpha <- .05
+for(i in 1:10000) {
+  x <- rnorm(n, mu, sigma)
+  out<- t.test(x, conf.level=1-alpha, mu=mu)
+  rejectPvalue[i] <- out$p.value < alpha
+}
+mean(rejectPvalue)
+```
+returns a .48, our type I error rate is 48%
+
+# c
+
+The sampling distribution of the p values did not surprise me as they should be the same relatively for all the confidence intervals we generate
+P value: probability of observing data as or more favorable to the alternative as what we observed ssuming null is true, the null and real mu doesn't change.
+
+# d
+Changing $\alpha$ levels
+```{r}
+rejectPvalue <- c()
+alpha <- .05
+for(i in 1:10000) {
+  x <- rnorm(n, mu, sigma)
+  out<- t.test(x, conf.level=1-alpha, mu=mu)
+  rejectPvalue[i] <- out$p.value < alpha
+}
+mean(rejectPvalue)
+#returns a mean of .48, close to the alpha value
+rejectPvalue <- c()
+alpha <- .01
+for(i in 1:10000) {
+  x <- rnorm(n, mu, sigma)
+  out<- t.test(x, conf.level=1-alpha, mu=mu)
+  rejectPvalue[i] <- out$p.value < alpha
+}
+mean(rejectPvalue)
+#returns a mean of .01 which is our alpha value
+rejectPvalue <- c()
+alpha <- .84
+for(i in 1:10000) {
+  x <- rnorm(n, mu, sigma)
+  out<- t.test(x, conf.level=1-alpha, mu=mu)
+  rejectPvalue[i] <- out$p.value < alpha
+}
+mean(rejectPvalue)
+#returns a mean of .837 which is close to our alpha value
+```
+
+# e
+The type I error rate is equal to $\alpha$, this can be related to the convergence rate where it was equal to 1-$\alpha$, or the rejection rate being equal to $\alpha$ as they all are impacted by alpha
+
+# Problem 2
+
+A Type II error is when we wrongfully fail to reject a null that is not correct
+
+Ho : $\mu=125$ grams
+Ha : $\mu$ does not equal 125 grams
+
+In reality $\mu=127$ grams
+Collecting a 36 sample of oranges from a grove where $\mu_{true}=127$ and $\sigma=5$ (only used to generate data and is unknown when making confidence interval)
+```{r}
+muNull <- 125
+mu <- 127
+sigma <- 5
+#Ho: mu = 125
+#Ha: mu !=125
+alpha <- .01
+# null should be rejected
+
+#A type II error is when we don't reject the null when it should be rejected
+oranges2=c(122, 126, 128, 121, 128, 127, 127, 133, 121,
+           133, 123, 121, 123, 128, 128, 125, 122, 124,
+           133, 128, 124, 122, 126, 119, 125, 123, 133,
+           132, 127, 121, 132, 131, 131, 131, 125, 131)
+
+```
+
+# a
+Using r function to generate a confidence interval at significance level $\alpha=.05$ and testing with p value and rejection region as well
+```{r}
+#testing with conf intervals
+xbar <- mean(oranges2)
+sd <- sd(oranges2)
+n <- length(oranges2)
+#we assume we don't know the sigma to test hypothesis so must use t test
+t.test(oranges2, conf.level=.99, alternative="two.sided", mu=125) 
+
+
+#returns a confidence interval of (124.594, 128.406) which approximately contains the null value (fail to reject null)
+
+#testing with rejections regions
+tobs <- (xbar-127)/sqrt(sd^2/n)
+tobs
+RR1<-qt(.025, n-1)
+RR2<-qt(.975, n-1)
+c(RR1,RR2)
+tobs>RR1 & tobs<RR2
+#returns a TRUE so the tobs is contained within the rejection region (fail to reject the null)
+
+#testin with pvalue
+pvalue <- pt(tobs, n-1, lower.tail=TRUE)*2
+pvalue
+pvalue < alpha
+#returns a false so pvalue is either equal or greater than alpha (fail to reject the null)
+```
+With all the tests done, it is practical to say that we should fail to reject the null hypothesis, but the null hypothesis is actually not true, therefore we are making a type II error
+
+# b
+Monte Carlo simmulation to:
+
+visualize the sampling distribution of the pvalue
+```{r}
+orange_tester2 <- function(n, mu, sigma, alpha){
+  x <- rnorm(n,mu,sigma)
+  out <- t.test(x, conf.level=1-alpha, alternative="two.sided", mu=127)
+  return(out$p.value)
+}
+pvalues <- replicate(50000, orange_tester2(n=n, mu=127, sigma=5, alpha=.05))
+hist(pvalues, main="Sampling Distriburion of p values", xlab="p values")
+#the sampling distribution of the p values seems to be uniform
+
+```
+
+compute how frequently the typeII error rate
+```{r}
+power <- function(alpha, muNull, mu, n, sigma){
+  x <- rnorm(n, mu, sigma)
+  test_out <- t.test(x, conf.level=1-alpha, alternative="two.sided", mu=125)
+  decision <-test_out$p.value<alpha
+  return(decision)
+}
+out<-replicate(10000, power(alpha=.05, muNull=125, mu=127, n=length(oranges2), sigma=5))
+1-mean(out)
+#wrongly failed to reject the null about 35.84% of the time, our type II error rate is about .3584
+```
+
+# c
+We fail to reject the null about 35.84% or 36% of the time so our type II error rate is just that since we know that the null is incorrect.
+
+# d 
+Increasing sample size n from 36 to 40
+```{r}
+n<-40
+power <- function(alpha, muNull, mu, n, sigma){
+  x <- rnorm(n, mu, sigma)
+  test_out <- t.test(x, conf.level=1-alpha, alternative="two.sided", mu=125)
+  decision <-test_out$p.value<alpha
+  return(decision)
+}
+out<-replicate(10000, power(alpha=.05, muNull=125, mu=127, n=40, sigma=5))
+1-mean(out) # this is the type II rate
+
+```
+When we increase the sample size, the type II error rate decreases since the power increases and 1-power=typeII error
+(we have more data to work with and this way we make less errors)
+
+# d
+Increasing the $\sigma$ from 5 to 6
+```{r}
+n<-36
+sigma<-6
+power <- function(alpha, muNull, mu, n, sigma){
+  x <- rnorm(n, mu, sigma)
+  test_out <- t.test(x, conf.level=1-alpha, alternative="two.sided", mu=125)
+  decision <-test_out$p.value<alpha
+  return(decision)
+}
+out<-replicate(10000, power(alpha=.05, muNull=125, mu=127, n=length(oranges2), sigma=6))
+1-mean(out) #this is the typeII rate
+```
+When we increase $\sigma$, or have more variability in our data, the typeII error rate increases since power decreases
+(with more variability, ability to detect a false null decreases)
+
+# e
+Increasing $\alpha$ from .05 to .10
+```{r}
+sigma<-5
+alpha<-.10
+power <- function(alpha, muNull, mu, n, sigma){
+  x <- rnorm(n, mu, sigma)
+  test_out <- t.test(x, conf.level=1-alpha, alternative="two.sided", mu=125)
+  decision <-test_out$p.value<alpha
+  return(decision)
+}
+out<-replicate(10000, power(alpha=.10, muNull=125, mu=127, n=length(oranges2), sigma=5))
+1-mean(out) #this is the typeII rate
+
+```
+Increasing $\alpha$ decreased the typeII error, higher the value of $\alpha$ the easier it is to reject the null hypothesis
+(increasing $\alpha$ also increases the chances of type I error though)
+
+# f
+Increasing the $\mu_{true}$ from 127 to 128
+```{r}
+alpha<-.05
+mu <-128
+power <- function(alpha, muNull, mu, n, sigma){
+  x <- rnorm(n, mu, sigma)
+  test_out <- t.test(x, conf.level=1-alpha, alternative="two.sided", mu=125)
+  decision <-test_out$p.value<alpha
+  return(decision)
+}
+out<-replicate(10000, power(alpha=.05, muNull=125, mu=128, n=length(oranges2), sigma=5))
+1-mean(out) #this is the typeII rate
+
+```
+As the difference between the real $\mu$ and the null $\mu$ increases, the type II error decreases and power increases
+(the ability to detect a false null will increase as the real $\mu$ goes further away from the null hypothesis $\mu$)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

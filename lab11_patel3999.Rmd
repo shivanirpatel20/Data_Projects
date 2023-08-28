@@ -1,0 +1,194 @@
+---
+title: "Stat 3202 Lab 11"
+author: "Shivani patel.3999"
+date: "3/28/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+tinytex::install_tinytex()
+# Problem 1
+
+Creating confidence intervals (1-$\alpha$)% for the true population mean difference $\mu_x$-$\mu_y$ and calculating coverage rate
+
+Coverage long term should be equal to 1-$\alpha$
+
+#a)
+
+(1-$\alpha$)% confidence interval for mean difference $\mu_{x}-\mu_{y}$ for two populations X and Y with normal data and known variances $\sigma_{x}^2$ and $\sigma_{y}^2$
+
+$\bar{x}$-$\bar{y}$+-$z_{1-\frac{\alpha}{2}}$* $\sqrt{\frac{\sigma_{x}^2}{x} + \frac{\sigma_{y}^2}{n_{y}}}$ 
+
+#b)
+
+When $\mu_{x}=10$,  $\sigma_{x}=3$, $n_{x}=5$
+$\mu_{y}=5$, $\sigma_{y}=5.5$, $n_{y}=8$        $\alpha=.05$ 
+
+Both populations are normal and confidence intervals for the mean difference created and coverage calculated
+
+```{r}
+n_x <- 5
+n_y <- 8
+mu_x <- 10
+mu_y <- 5
+sigma_x <- 3            
+sigma_y <- 5.5
+alpha <- .05
+
+CI_dif <- function(n_x, n_y,mu_x, mu_y, sigma_x, sigma_y,alpha){
+  sample_x <- rnorm(n_x, mu_x, sigma_x)
+  sample_y <- rnorm(n_y, mu_y, sigma_y)
+  xbar <- mean(sample_x)
+  ybar <- mean(sample_y)
+  LL <- xbar-ybar-qnorm(1-alpha/2)*sqrt(sigma_x^2/(n_x) + sigma_y^2/(n_y))
+  UL <- xbar-ybar+qnorm(1-alpha/2)*sqrt(sigma_x^2/(n_x) + sigma_y^2/(n_y))
+  coverage <- LL<=mu_x-mu_y & UL>=mu_x-mu_y
+}
+
+NMC <- 10000
+CI <- replicate(NMC, CI_dif(n_x=n_x, n_y=n_y, mu_x=mu_x, mu_y=mu_y ,sigma_x=sigma_x, sigma_y=sigma_y,alpha=alpha))
+mean(CI)
+
+
+```
+The coverage rate for the intervals is .954 which is approxomately what 1-$\alpha$ would equal to when $\alpha$=.05
+
+
+#c)
+
+Confidence intervals calculated when the variances are not known but are equal and we must use the statistic s pooled for $\sigma_{x} = \sigma_{y} = \sigma$
+
+Let $\sigma_{x}=3$ and $\sigma_{y}=3$
+
+i)
+
+$\bar{x}$-$\bar{y}$+-$t_{(1-\frac{\alpha}{2}, n_x+n_y-2)}* s_{p}\sqrt{\frac{1}{n_{x}} + \frac{1}{n_{y}}}$
+
+where $s_{p} = \sqrt{\frac{(n_{x}-1)s_{x}^2+(n_{y}-1)s_{y}^2}{n_{x}+n_{y}-2}}$
+
+```{r}
+n_x <- 5
+n_y <- 8
+mu_x <- 10
+mu_y <- 5
+sigma_x <- 3            
+sigma_y <- 3
+alpha <- .05
+
+CI_diff<-function(n_x, n_y, mu_x, mu_y, sigma_x, sigma_y,alpha){
+  sample1<-rnorm(n_x,mu_x,sigma_x)
+  sample2 <-rnorm(n_y,mu_y,sigma_y)
+  xbar<-mean(sample1)
+  ybar<-mean(sample2)
+  sd_x<-sd(sample1)
+  sd_y<-sd(sample2)
+  sd_pool2<- (((n_x-1)*sd_x^2 + (n_y-1)*sd_y^2)) / (n_x+n_y-2)
+  
+  LL<-(xbar-ybar)-qt(1-alpha/2, n_x+n_y-2)*sqrt(sd_pool2)*sqrt(1/n_x + 1/n_y)
+  UL<-(xbar-ybar)+qt(1-alpha/2, n_x+n_y-2)*sqrt(sd_pool2)*sqrt(1/n_x + 1/n_y)
+  coverage<-mu_x-mu_y>=LL & mu_x-mu_y<=UL
+  return(coverage)
+}
+NMC<-10000
+CI<-replicate(NMC,CI_diff(n_x=n_x, n_y=n_y, mu_x=mu_x, mu_y=mu_y ,sigma_x=sigma_x, sigma_y=sigma_y,alpha=alpha))
+mean(CI)
+
+```
+The coverage rate is once again approximately 1-$\alpha$
+
+ii)
+Use t.test function
+
+```{r}
+NMC<-10000
+coverage<-c()
+for(i in 1:NMC){
+  sample1<-rnorm(n_x,mu_x,sigma_x)
+  sample2<-rnorm(n_y,mu_y,sigma_y)
+  out<-t.test(sample1,sample2,var.equal=TRUE, conf.level=1-alpha)
+  coverage[i]<-out$conf.int[1]<mu_x-mu_y & out$conf.int[2]>mu_x-mu_y
+}
+mean(coverage)
+```
+this value for the coverage rate is even closer to 1-$\alpha$
+
+#Problem 2
+
+Confidence intervals for differences in mean when variance is unknown and unequal
+(must use degrees of freedom)
+
+#a)
+
+If v is the degrees of freedom
+
+i)
+
+v = $\frac{(\frac{s_{A}^2}{n_{A}}+\frac{s_{B}^2}{n_{B}})^2}{\frac{s_{A}^4}{n_{A}^2(n_{A}-1)}+\frac{s_{B}^4}{n_{B}^2(n_{B}-1)}}$
+
+and the confidence interval for differences in means is
+
+$\bar{x}$-$\bar{y}$+-$t_{1-\frac{\alpha}{2},v} * \sqrt{\frac{s_{x}^2}{n_{x}}+\frac{s_{y}^2}{n_{y}}}$
+
+ii)
+
+When $\mu_{x}=10$,  $\sigma_{x}=3$, $n_{x}=5$
+$\mu_{y}=5$, $\sigma_{y}=5.5$, $n_{y}=8$        $\alpha=.05$ 
+
+```{r}
+mu_x <- 10
+sigma_x <- 3
+n_x <- 5
+mu_y <- 5
+sigma_y <- 5.5
+n_y <- 8
+alpha <- .05
+
+NMC<-10000
+coverage<-c()
+for(i in 1:NMC){
+  sample1<-rnorm(n_x,mu_x,sigma_x)
+  sample2<-rnorm(n_y,mu_y,sigma_y)
+  out<-t.test(sample1,sample2,var.equal=FALSE, conf.level=1-alpha)
+  coverage[i]<-out$conf.int[1]<mu_x-mu_y & out$conf.int[2]>mu_x-mu_y
+}
+mean(coverage)
+```
+The coverage rate is approximately 1-$\alpha$ when $\alpha=.05$
+
+#Problem 3
+
+Confidence Interval for Difference of Means with Unknown and Unequal Variances but Conservative Degrees of Freedom
+
+degrees of freedom = min($n_{x}-1$, $n_{y}-1$)
+
+so v = min($n_{x}-1$, $n_{y}-1$)
+
+```{r}
+mu_x <- 10
+sigma_x <- 3
+n_x <- 5
+mu_y <- 5
+sigma_y <- 5.5
+n_y <- 8
+alpha <- .05
+v<-min(n_x-1, n_y-1)
+
+CI_dif<-function(mu_x, sigma_x, n_x, mu_y, sigma_y, n_y, alpha, v){
+  sample1<-rnorm(n_x,mu_x,sigma_x)
+  sample2<-rnorm(n_y,mu_y,sigma_y)
+  xbar<-mean(sample1)
+  ybar<-mean(sample2)
+  s_x<-sd(sample1)
+  s_y<-sd(sample2)
+ 
+  LL<-xbar-ybar-qt(1-alpha/2, v)*sqrt(s_x^2/n_x + s_y^2/n_y)
+  UL<-xbar-ybar+qt(1-alpha/2, v)*sqrt(s_x^2/n_x + s_y^2/n_y)
+  coverage<-mu_x-mu_y>=LL & mu_x-mu_y<=UL
+  return(coverage)
+}
+NMC<-10000
+CI<-replicate(NMC,CI_dif(n_x=n_x, n_y=n_y, mu_x=mu_x, mu_y=mu_y ,sigma_x=sigma_x, sigma_y=sigma_y,alpha=alpha, v=v))
+mean(CI)
+```
+This value is larger than the coverage rate of 1-$\alpha$ because the method of obtaining the degrees of freedom gives the largest margin of error, this is what makes the degrees of freedom conservative.

@@ -1,0 +1,428 @@
+---
+title: 'Stats 3303 Final Project: Beysian Analysis in American Football'
+author: "Shivani Patel"
+date: '2023-04-25'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Introduction
+
+```{r, echo=FALSE}
+library(readxl)
+library(tinytex)
+Players <- read_excel("/Users/shivanipatel/Downloads/Stats3303ProjData.xlsx")
+```
+
+We want to propose a Bayesian hierarchical model for the probability of successfully making a kick as a function of distance.
+
+-made is a response (binary) while distance is predictor (continuous)
+
+-probabilities may differ from kicker to kicker (we have 9 players so 9 groups)
+
+Remark: The players in this report are labelled A-I but for the purposes of accurate data analysis we have labeled the players 1-9 in the data set. 
+
+Let $Y_{ij}$ be an indicator of whether the ith kick of the jth player was made
+
+where i = 1,2 ... $N_{total observations}$ and j=1,2,...9
+
+finally let $x_{ij}$ be the distance the kick was made used to estimate $Y_{ij}$
+
+We consider the following model for the kick's made data Y given our distance data x:
+
+$p(Y |\alpha, \beta) = \Pi \Pi p(Y_{ij} |\alpha_{j} , \beta_{j})$ 
+-first $\Pi$ is product over all the j's and second one is product over all the i's
+
+
+Say:
+
+$Y_{ij} |\alpha_{j} , \beta_{j}$ follows a  $Bern(\theta_{ij} )$
+
+and 
+
+$\log(\frac{\theta_{ij}}{1-\theta_{ij}}) = \alpha_{j} + \beta_{j} * x_{ij}$
+
+Now that we have our likelihood of kicks made for each observation for a player and a logit of $\theta_{ij}$, we must specify our priors
+
+
+### Obtain Priors 
+
+We need a prior for $\alpha$ and $\beta$ where $\alpha$ is considered the intercept and $\beta$ is the slope of this linear relationship. We are using our data so we know the true values of parameters.
+
+In order to come up with the ideal priors I had used the prior info I had : 
+
+At around 25 yards, the average kicker should make 98-99% of their kicks and at around 55 yards, the average kicker should make 56-60% of their kicks.
+
+I used the equation $\alpha + \beta(25) = \log{\frac{.985}{1-.985}}$ and $\alpha + \beta(55) = \log{\frac{.58}{1-.58}}$
+
+to get some idea of possible $\alpha$ values and $\beta$ values. What a possible mean could be and also how each parameter varies. From this trial and error method I would suggest a normal distribution of $\mu_{\alpha}$ and $\mu_{\beta}$ and an inverse gamma distribution for $\sigma_{\alpha}$ and $\sigma_{\beta}$.
+
+So our priors will be:
+
+$\mu_{\alpha}$ will follow a  Normal(5, 1)    (second parameter is of standard deviation)
+
+$\sigma_{\alpha}$ will follow a InvGamma(1, 3)
+
+
+$\mu_{\beta}$ will follow a Normal(-.1, .06)
+
+$\sigma_{\beta}$ will follow a  InvGamma(1, 3)
+
+The values used as arguments were obtained from the trial and error process I explained above.
+
+
+So that way: 
+
+$\alpha_{j}$ follows Normal($\mu_{\alpha}, \sigma^2_{\alpha}$) & 
+
+$\beta_{j}$ follows Normal($\mu_{\beta}, \sigma^2_{\beta}$)
+
+And finally using this we get:
+
+$p(\mu_{\alpha}, \sigma^2_{\alpha}, \mu_{\beta}, \sigma^2_{\beta}) = p(\mu_{\alpha})p(\sigma^2_{\alpha})p( \mu_{\beta})p(\sigma^2_{\beta})$
+
+## 1. Specifying all the model parameters in context:
+
+$\alpha_j$ : Player specific log odds of a kick being made in the reference group (kick made from 0 distance)
+
+$\beta_j$ : The increase in player specific log odds for that specific attempt to make a kick as a distance increases one unit
+
+$\mu_{\alpha}$: The mean across players of the log odds for that specific attempt to make kick in the reference group being made
+
+$\mu_{\beta}$: Mean increase across players of the log odds for that kick attempt as distance increases by one unit
+
+$\sigma^2_{\alpha}$: Captures the deviation across players in the player-specific log odds among the reference group
+
+$\sigma^2_{\beta}$: Captures the deviation across players in the player-specific log odds increase for the kick attempt as distance increases one unit
+
+Remark: For the purposes of how Jags was created I had to use a $\tau_{alpha}$ and $\tau_{\beta}$ instead of $\sigma_{\alpha}$ and $\sigma_{\beta}$. This can be done because tau distributions are inverses of sigma distributions. So for both $\tau_{\alpha}$ and $\tau_{\beta}$ the gamma distribution is used.
+
+$\tau_{\alpha}$ follows Gamma(1, 1/3)
+
+$\tau_{\beta}$ follows Gamma(1, 1/3)
+
+## 2. Running a Jags Model:
+
+[Code shown in the end]
+
+```{r, echo=FALSE}
+library(readr)
+library(coda)
+library(rjags)
+
+for(i in 1:nrow(Players)){
+  if(Players$Player[i] == 2){
+    Players$Player[i]=1
+  }
+  if(Players$Player[i] == 8){
+    Players$Player[i]=2
+  }
+  if(Players$Player[i] == 10){
+    Players$Player[i]=3
+  }
+  if(Players$Player[i] == 11){
+    Players$Player[i]=4
+  }
+  if(Players$Player[i] == 13){
+    Players$Player[i]=5
+  }
+  if(Players$Player[i] == 18){
+    Players$Player[i]=6
+  }
+  if(Players$Player[i] == 19){
+    Players$Player[i]=7
+  }
+  if(Players$Player[i] == 21){
+    Players$Player[i]=8
+  }
+  if(Players$Player[i] == 23){
+    Players$Player[i]=9
+  }
+}
+nPlayer=9
+mydata = list(n=nrow(Players),nPlayer=9, y=Players$Made, x=Players$Distance, Player=Players$Player)
+
+# initialization for JAGS:
+myinit = list(alpha=rep(0,nPlayer), beta=rep(0, nPlayer), mu_alpha=0, tau_alpha=1, mu_beta=0, tau_beta=1)
+              
+# Setup MCMC options for JAGS:
+niters=70000 # **total** number of iterations, **including** burn-in
+nburns=40000
+nadapt=30000
+nchains=2
+
+# Specify the JAGS model:
+mod = "model {
+# likelihood
+for (i in 1:n) {
+y[i] ~ dbern(theta[i])
+logit(theta[i]) <- alpha[Player[i]] + beta[Player[i]]*x[i]
+}
+# priors
+
+
+for (j in 1:nPlayer) {
+alpha[j] ~ dnorm(mu_alpha, tau_alpha)
+beta[j] ~ dnorm(mu_alpha, tau_beta)
+}
+mu_alpha ~ dnorm(5, 1)
+tau_alpha ~ dgamma(1,3)
+
+mu_beta ~ dnorm(-.1, .06)
+tau_beta ~ dgamma(1,3)
+
+}"
+
+# Now let's setup the model:
+fit=jags.model(textConnection(mod),
+data=mydata, inits=myinit, n.chains=nchains, n.adapt=nadapt)
+
+fit.samples=coda.samples(fit,c("alpha","beta","mu_alpha", "tau_alpha", "mu_beta", "tau_beta"), niters)
+
+head(fit.samples[[1]])
+                         
+```
+
+
+## 3. Results of Jags and Detail:
+
+I first had 10000 iterations total but realized I needed more in order for my trace plots (shown in the end of this report in appendix) to converge. After increasing the iterations to 50000 the results of the trace plots looked better. But when observing the density plots, I noticed all looked nice and normal except for $\mu_{\alpha}$. I increased the iterations once again to 70000. This helped the density plot for that parameter look nice and symmetrical. By then both of my chains showed convergence to each other. The $\tau$ graphs for both $\alpha$ and $\beta$ were observed keeping in mind that the distribution for that parameter wasn't normal and istead a gamma, so those density plots pass the test.
+
+My number of iterations for model to burn in was 40000 and the number of iterations for adapt was 30000.
+
+My initial values were:
+
+$\mu_{\alpha}$=0, $\tau_{\alpha}$=1, $\mu_{\beta}$=0, $\tau_{\beta}$=1
+
+
+## 4. Interperate Model
+
+Looking at the density plots of the values for $\beta$ (our slope parameter) for each player above, there is no posterior mass with $\beta$>0 for any of the players. So I  will assume it's safe to conclude that greater distance does not have an increasing effect on amount of times a kick is successfully made.
+
+## 5.
+
+### Question A
+
+Kicker A currently earns the league average salary for kickers. His agent believes he should earn more based on his performance to date. Does your analysis support this assertion?
+
+```{r, echo=FALSE}
+
+a1 = c(fit.samples[[1]][(nburns+1):niters,1],fit.samples[[2]][(nburns+1):niters,1])
+a2 = c(fit.samples[[1]][(nburns+1):niters,2],fit.samples[[2]][(nburns+1):niters,2])
+a3 = c(fit.samples[[1]][(nburns+1):niters,3],fit.samples[[2]][(nburns+1):niters,3])
+a4 = c(fit.samples[[1]][(nburns+1):niters,4],fit.samples[[2]][(nburns+1):niters,4])
+a5 = c(fit.samples[[1]][(nburns+1):niters,5],fit.samples[[2]][(nburns+1):niters,5])
+a6 = c(fit.samples[[1]][(nburns+1):niters,6],fit.samples[[2]][(nburns+1):niters,6])
+a7 = c(fit.samples[[1]][(nburns+1):niters,7],fit.samples[[2]][(nburns+1):niters,7])
+a8 = c(fit.samples[[1]][(nburns+1):niters,8],fit.samples[[2]][(nburns+1):niters,8])
+a9 = c(fit.samples[[1]][(nburns+1):niters,9],fit.samples[[2]][(nburns+1):niters,9])
+
+muA = c(fit.samples[[1]][(nburns+1):niters,19],fit.samples[[2]][(nburns+1):niters,19])
+
+group = c(rep(1,2*(niters-nburns)), rep(2,2*(niters-nburns)), rep(3,2*(niters-nburns)), rep(4,2*(niters-nburns)), rep(5,2*(niters-nburns)), rep(6,2*(niters-nburns)), rep(7,2*(niters-nburns)), rep(8,2*(niters-nburns)),rep(9,2*(niters-nburns)), rep("mean",2*(niters-nburns)))
+
+valuesAlpha = c(a1, a2, a3, a4, a5, a6, a7, a8, a9, muA )
+dfA = data.frame(group, valuesAlpha)
+boxplot(dfA$valuesAlpha ~ dfA$group, xlab="PlayerA-I", ylab="Values")
+```
+
+Player A (in graph it's player 1) has the greatest $\alpha$ median than the rest of the players (but it is not by much) and has a greater $\alpha$ median than the median of $\mu_{\alpha}$ parameter (once again not by much). We can use this measure of center to conclude that even with a 0 yard kick made, the player does a greater chance of success (kick is made) compared to other players when they have a distance of 0, but it is not by a great amount.
+
+```{r, echo=FALSE}
+b1 = c(fit.samples[[1]][(nburns+1):niters,10],fit.samples[[2]][(nburns+1):niters,10])
+b2 = c(fit.samples[[1]][(nburns+1):niters,11],fit.samples[[2]][(nburns+1):niters,11])
+b3 = c(fit.samples[[1]][(nburns+1):niters,12],fit.samples[[2]][(nburns+1):niters,12])
+b4 = c(fit.samples[[1]][(nburns+1):niters,13],fit.samples[[2]][(nburns+1):niters,13])
+b5 = c(fit.samples[[1]][(nburns+1):niters,14],fit.samples[[2]][(nburns+1):niters,14])
+b6 = c(fit.samples[[1]][(nburns+1):niters,15],fit.samples[[2]][(nburns+1):niters,15])
+b7 = c(fit.samples[[1]][(nburns+1):niters,16],fit.samples[[2]][(nburns+1):niters,16])
+b8 = c(fit.samples[[1]][(nburns+1):niters,17],fit.samples[[2]][(nburns+1):niters,17])
+b9 = c(fit.samples[[1]][(nburns+1):niters,18],fit.samples[[2]][(nburns+1):niters,18])
+
+muB = c(fit.samples[[1]][(nburns+1):niters,20],fit.samples[[2]][(nburns+1):niters,20])
+
+group = c(rep(1,2*(niters-nburns)), rep(2,2*(niters-nburns)), rep(3,2*(niters-nburns)), rep(4,2*(niters-nburns)), rep(5,2*(niters-nburns)), rep(6,2*(niters-nburns)), rep(7,2*(niters-nburns)), rep(8,2*(niters-nburns)),rep(9,2*(niters-nburns)), rep("mean",2*(niters-nburns)) )
+
+valuesBeta = c(b1, b2, b3, b4, b5, b6, b7, b8, b9, muB)
+dfB = data.frame(group, valuesBeta)
+boxplot(dfB$valuesBeta ~ dfB$group, xlab="PlayerA-I", ylab="Values", ylim=c(-.3, .2))
+```
+Observing the boxplots of $\beta$ for all the players. Player A's median for $\beta$ is very close to the median of $\mu_{\beta}$. We can use this measure of center to conclude that player A's slope parameter $\beta_1$, is not that different from an average player's slope parameter. So player A's increase in log odds of a kick attempt for every one unit increase in distance isn't different from the average players'.
+
+Using both these conclusions about the player's parameters I would disagree with the agent and say that Player A does indeed perform well, but not that well compared to an average player. He is what I would call an average player so the amount player A is making currently is suitable for their performance. 
+
+
+
+### Question B:
+
+In a particular game situation, the head coach for kicker B believes he should kick a field goal if the probability of success at 40 yards is above 90%. What is your recommendation?
+
+```{r, echo=FALSE}
+#Try find predictive prob of distance=40 yards for player B
+
+LogitNewForty = a2+b2*40
+thetaNewForty = 1/(exp(-LogitNewForty)+ 1) #ask during office hours
+mean(thetaNewForty)
+plot(density(thetaNewForty))
+mean(thetaNewForty>=.90)
+```
+
+Taking a look at the density plot of the predictive posterior probability of making a kick. It looks like there is great posterior mass, about most of the posterior mass is centered around .90. The probability of the  predictive posterior being at least .90, is around .61 which I would say is safe to conclude that the head coach's prediction for kicker B  kicking a field goal if the probability of success at 40 yards is above 90%, is correct.
+
+## Appendix (Trace Plots and Density Plots)
+
+```{r, echo=FALSE}
+par(mar=c(1.5, 1.5, 1.5, 1.5))
+plot(window(fit.samples, start=nburns+nadapt))
+```
+
+## Appendix (MY CODE)
+
+
+Loading Data 
+
+```{r, eval=FALSE}
+library(readxl)
+Players <- read_excel("/Users/shivanipatel/Downloads/Stats3303ProjData.xlsx")
+```
+
+
+Running Jags
+
+```{r, eval=FALSE}
+library(readr)
+library(coda)
+library(rjags)
+
+for(i in 1:nrow(Players)){
+  if(Players$Player[i] == 2){
+    Players$Player[i]=1
+  }
+  if(Players$Player[i] == 8){
+    Players$Player[i]=2
+  }
+  if(Players$Player[i] == 10){
+    Players$Player[i]=3
+  }
+  if(Players$Player[i] == 11){
+    Players$Player[i]=4
+  }
+  if(Players$Player[i] == 13){
+    Players$Player[i]=5
+  }
+  if(Players$Player[i] == 18){
+    Players$Player[i]=6
+  }
+  if(Players$Player[i] == 19){
+    Players$Player[i]=7
+  }
+  if(Players$Player[i] == 21){
+    Players$Player[i]=8
+  }
+  if(Players$Player[i] == 23){
+    Players$Player[i]=9
+  }
+}
+nPlayer=9
+mydata = list(n=nrow(Players),nPlayer=9, y=Players$Made, x=Players$Distance, Player=Players$Player)
+
+# initialization for JAGS:
+myinit = list(alpha=rep(0,nPlayer), beta=rep(0, nPlayer), mu_alpha=0, tau_alpha=1, mu_beta=0, tau_beta=1)
+              
+# Setup MCMC options for JAGS:
+niters=70000 # **total** number of iterations, **including** burn-in
+nburns=40000
+nadapt=30000
+nchains=2
+
+# Specify the JAGS model:
+mod = "model {
+# likelihood
+for (i in 1:n) {
+y[i] ~ dbern(theta[i])
+logit(theta[i]) <- alpha[Player[i]] + beta[Player[i]]*x[i]
+}
+# priors
+
+
+for (j in 1:nPlayer) {
+alpha[j] ~ dnorm(mu_alpha, tau_alpha)
+beta[j] ~ dnorm(mu_alpha, tau_beta)
+}
+mu_alpha ~ dnorm(5, 1)
+tau_alpha ~ dgamma(1,3)
+
+mu_beta ~ dnorm(-.1, .06)
+tau_beta ~ dgamma(1,3)
+
+}"
+
+# Now let's setup the model:
+fit=jags.model(textConnection(mod),
+data=mydata, inits=myinit, n.chains=nchains, n.adapt=nadapt)
+
+fit.samples=coda.samples(fit,c("alpha","beta","mu_alpha", "tau_alpha", "mu_beta", "tau_beta"), niters)
+
+head(fit.samples[[1]])
+```
+
+Question A: 5
+
+Alpha boxplot
+```{r, eval=FALSE}
+a1 = c(fit.samples[[1]][(nburns+1):niters,1],fit.samples[[2]][(nburns+1):niters,1])
+a2 = c(fit.samples[[1]][(nburns+1):niters,2],fit.samples[[2]][(nburns+1):niters,2])
+a3 = c(fit.samples[[1]][(nburns+1):niters,3],fit.samples[[2]][(nburns+1):niters,3])
+a4 = c(fit.samples[[1]][(nburns+1):niters,4],fit.samples[[2]][(nburns+1):niters,4])
+a5 = c(fit.samples[[1]][(nburns+1):niters,5],fit.samples[[2]][(nburns+1):niters,5])
+a6 = c(fit.samples[[1]][(nburns+1):niters,6],fit.samples[[2]][(nburns+1):niters,6])
+a7 = c(fit.samples[[1]][(nburns+1):niters,7],fit.samples[[2]][(nburns+1):niters,7])
+a8 = c(fit.samples[[1]][(nburns+1):niters,8],fit.samples[[2]][(nburns+1):niters,8])
+a9 = c(fit.samples[[1]][(nburns+1):niters,9],fit.samples[[2]][(nburns+1):niters,9])
+
+muA = c(fit.samples[[1]][(nburns+1):niters,19],fit.samples[[2]][(nburns+1):niters,19])
+
+group = c(rep(1,2*(niters-nburns)), rep(2,2*(niters-nburns)), rep(3,2*(niters-nburns)), rep(4,2*(niters-nburns)), rep(5,2*(niters-nburns)), rep(6,2*(niters-nburns)), rep(7,2*(niters-nburns)), rep(8,2*(niters-nburns)),rep(9,2*(niters-nburns)), rep("mean",2*(niters-nburns)))
+
+valuesAlpha = c(a1, a2, a3, a4, a5, a6, a7, a8, a9, muA )
+dfA = data.frame(group, valuesAlpha)
+boxplot(dfA$valuesAlpha ~ dfA$group, xlab="PlayerA-I", ylab="Values")
+```
+
+Beta boxplot
+
+```{r, eval=FALSE}
+b1 = c(fit.samples[[1]][(nburns+1):niters,10],fit.samples[[2]][(nburns+1):niters,10])
+b2 = c(fit.samples[[1]][(nburns+1):niters,11],fit.samples[[2]][(nburns+1):niters,11])
+b3 = c(fit.samples[[1]][(nburns+1):niters,12],fit.samples[[2]][(nburns+1):niters,12])
+b4 = c(fit.samples[[1]][(nburns+1):niters,13],fit.samples[[2]][(nburns+1):niters,13])
+b5 = c(fit.samples[[1]][(nburns+1):niters,14],fit.samples[[2]][(nburns+1):niters,14])
+b6 = c(fit.samples[[1]][(nburns+1):niters,15],fit.samples[[2]][(nburns+1):niters,15])
+b7 = c(fit.samples[[1]][(nburns+1):niters,16],fit.samples[[2]][(nburns+1):niters,16])
+b8 = c(fit.samples[[1]][(nburns+1):niters,17],fit.samples[[2]][(nburns+1):niters,17])
+b9 = c(fit.samples[[1]][(nburns+1):niters,18],fit.samples[[2]][(nburns+1):niters,18])
+
+muB = c(fit.samples[[1]][(nburns+1):niters,20],fit.samples[[2]][(nburns+1):niters,20])
+
+group = c(rep(1,2*(niters-nburns)), rep(2,2*(niters-nburns)), rep(3,2*(niters-nburns)), rep(4,2*(niters-nburns)), rep(5,2*(niters-nburns)), rep(6,2*(niters-nburns)), rep(7,2*(niters-nburns)), rep(8,2*(niters-nburns)),rep(9,2*(niters-nburns)), rep("mean",2*(niters-nburns)) )
+
+valuesBeta = c(b1, b2, b3, b4, b5, b6, b7, b8, b9, muB)
+dfB = data.frame(group, valuesBeta)
+boxplot(dfB$valuesBeta ~ dfB$group, xlab="PlayerA-I", ylab="Values", ylim=c(-.3, .2))
+```
+
+Question B: 5
+
+
+Posterior Predictive Probability for player B when distance is 40 
+```{r, eval=FALSE}
+LogitNewForty = a2+b2*40
+thetaNewForty = 1/(exp(-LogitNewForty)+ 1) #ask during office hours
+mean(thetaNewForty)
+plot(density(thetaNewForty))
+mean(thetaNewForty>=.90)
+```
+
+
+
