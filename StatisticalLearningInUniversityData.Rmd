@@ -1,0 +1,177 @@
+---
+title: "Statistical learning in University Data"
+author: "Shivani Patel"
+date: "2023-11-09"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(tinytex)
+library(ggplot2)
+library(glmnet)
+library(MASS)
+library(ISLR)
+```
+
+a) Split the data into a training set and a test set.
+
+```{r}
+load("/Users/shivanipatel/Downloads/uni.RData")
+nHalf <- 777 %/% 2
+trainUni <-uni[1:(nHalf+1),]
+testUni <-uni[(nHalf+2):777,]
+```
+
+
+b) Fit a linear model using least squares on the training set, and report the test error obtained.
+
+```{r}
+lm.fit <- lm(Apps ~ ., data = trainUni)
+contrasts(trainUni$Private)
+summary(lm.fit)
+
+
+lm.probs = predict(lm.fit, testUni, type='response')
+lm.probs[1:10]
+mean((testUni$Apps-lm.probs)^2)
+```
+
+c) Fit a ridge regression model on the training set, with $\lamda$ chosen by cross-validation. Report the test error obtained.
+
+```{r}
+
+x=model.matrix(Apps~.,trainUni)[,-1] #create matrix of x values, removing the intercept, don't want to shrink the intercept.
+y=trainUni$Apps
+
+set.seed(4620) #want toget the prefect lambda
+ridge.cv = cv.glmnet(x,y,alpha=0) #input model matrix x, response y and alpha=0 for ridge. 
+plot(ridge.cv)  #plots on log-lambda scale.  The '19' at the top refers to effective df.
+plot(ridge.cv$lambda,ridge.cv$cvm,xlim=c(0,5000))  # we can always plot things manually if we like, not a log scale, plot lamda as x and cvm as y
+lambda.cv = ridge.cv$lambda.min  # the minimizing lambda find lamda that minimizes cvm
+lambda.cv #use lamda=49
+
+fit.ridge = glmnet(x,y,alpha=0,lambda=49) # try a particular lambda value and see what we get, glmnet knows you must standardize x's for lasso and ridge, does it automatically 
+
+newy =testUni$Apps
+newx =model.matrix(Apps~., testUni)[,-1]
+pred.ridge = predict(fit.ridge,newx=newx) #alpha=0 is ridge and 1 is lasso
+mean((newy-pred.ridge)^2) #mean squared error, measure of predicted performance
+coef(fit.ridge)
+```
+
+
+
+d) Fit a LASSO model on the training set, with λ chosen by cross-validation. Report the test error obtained.
+
+```{r}
+x=model.matrix(Apps~.,trainUni)[,-1] #create matrix of x values, removing the intercept, don't want to shrink the intercept.
+y=trainUni$Apps
+
+set.seed(4620) #want toget the prefect lambda
+lasso.cv = cv.glmnet(x,y,alpha=1) #input model matrix x, response y and alpha=1 for lasso. 
+plot(lasso.cv)  #plots on log-lambda scale.  The '19' at the top refers to effective df.
+plot(lasso.cv$lambda,lasso.cv$cvm,xlim=c(0,600))  # we can always plot things manually if we like, not a log scale, plot lamda as x and cvm as y
+lambda.cv = lasso.cv$lambda.min  # the minimizing lambda find lamda that minimizes cvm
+lambda.cv #use lamda=12
+
+fit.lasso = glmnet(x,y,alpha=1,lambda=12) # try a particular lambda value and see what we get, glmnet knows you must standardize x's for lasso and ridge, does it automatically 
+
+newy =testUni$Apps
+newx =model.matrix(Apps~., testUni)[,-1]
+pred.lasso = predict(fit.lasso,newx=newx) #alpha=0 is ridge and 1 is lasso
+mean((newy-pred.lasso)^2) #mean squared error, measure of predicted performance
+coef(fit.lasso)
+```
+
+```{r}
+cor(uni[,-1])
+```
+
+
+e)
+
+I noticed that the mean squared error for the linear regression method was the smallest. The mean squared error was 2971892. There was approximately 100,000 mean squared error unit increase from linear to lasso and from lasso to ridge. These results can definetly change depending on how we split the training and testing data. The original dataset was not sorted in a specific way, so I just split the data set 50-50. Though if this dataset was sorted, our MSE can look a lot different. Or if we include different number of observations between the training and testing data. MSE isn't really as intuitive, but the model that relays the lowest MSE should be the optimal model. An MSE of 0 means that our model is perfect at predicting the response variable.
+
+We can say that the the way I split the training and testing data, linear regression gives more accurate prediction of college applications compared to ridge and lasso. Lasso is better when we want to make the model less complex though, as it zero's out certain predictors deemed unecessary. There were 777 observations in the orignal data set and we had 17 possible predictors for college Apps. Ridge and Lasso are mostly used when we have more predictors than observations. We also tend to like ridge and lasso when we know many of our predictors have an issue with multicollinearity. Observing the correlation matrix above, we see this isn't the biggest issue for this dataset. So these results make sense in those terms.
+
+f) Fit a principal component linear regression model on the training set
+
+```{r}
+set.seed(4620)  # only if you want to exactly repeat this output.
+fit.pcr = pcr(Apps~.,data=trainUni,scale=TRUE,validation="CV") #default is 10 fold cv
+#want pcr to automatically standardize w/ scale=TRUE
+summary(fit.pcr) #top has original dimensions. you can have at most P components. in this case 17 and one response variable
+
+#validation is in terms of RSMEP, root mean squared error. just square that value for MSE.
+
+#focus on row labeled cv (cross validated mean sq error). baseline is intercept only model. start adding components (add 1 component so add one such linear combination of old predictor list) in a way that maximizes variance (has most varaince). keep adding more and more components. want to choose value of m. want to minimize root mean squared error choose the number of components that does that. In this case its 17. 17 also has the largest % of variance explained in X
+
+#add more components, we have more variation that is explained in x. also variation of y is explained in the bottom.
+```
+
+Use cross validation to find number of principle components
+
+(In previous part I suggest we use 17 components because it had the minimum root mean squared error, and highest percent of explained variance in x)
+
+```{r}
+validationplot(fit.pcr,val.type="MSEP")
+```
+
+Looking at the graph above, we see that the elbow of the graph is approaching 17. Meaning that 17 components will yeild the lowest mean squared error. 
+
+g) Fit a partial least squares regression model on the training set
+
+```{r}
+set.seed(4620)   # only if you want to exactly repeat this output.
+fit.pls = plsr(Apps~.,data=trainUni,scale=TRUE,validation="CV")
+summary(fit.pls) #the way the summary is organized is the same as pca. choose the number of components based off smallest value of root mean sq error. partial least sq dont fit x values as well as pca but captures more of the relationship with the response!
+
+#perecent of variation explained in x are smaller in pls than pca. 
+#percent of variation explain in y is larger in pls than pca. 
+```
+
+Above we notice that at 10 components, the root mean squared error doesn't seem to change by much. We see that at 9 to 10 it decreases to about 271. We can say that the .1 difference in root mean squared after 10 components isn't that much to where we should add more components than necessary. 
+
+The percent of variance explain in Y doesn't really change as we increase from 10 components. 
+
+One draw back is that 10 components will only explain 76.23% of the variance in X. The reason is that with partial least squares, it doesn't fit the x values as well as principle component regression. But partial least squares will capture more of the relationship between y and x. This is because partial least squares is supervised and principle component regression is unsupervised.
+
+This means percent of variance explained in X is smaller in PLS than PCR, while percent of variation explained in Y is larger in PLS than PCR.
+
+```{r}
+validationplot(fit.pls,val.type="MSEP")
+```
+
+The elbow of the curve is actually around 5 I would say. This means we should also try and consider m=5 along with m=10. 
+
+
+h) Report test errors of both methods
+
+```{r}
+fit.pcr2 = pcr(Apps~.,data=testUni,scale=TRUE,ncomp=17) #this model princp comp reg with 17 components
+fit.pls2a = plsr(Apps~.,data=testUni,scale=TRUE,ncomp=5)#this model partial least sq with 5 components
+fit.pls2b = plsr(Apps~.,data=testUni,scale=TRUE,ncomp=10)#partial least sq reg with 10 components
+pcr.pred= predict( fit.pcr2,ncomp=17 ) #now compute predictions for newy
+pls.pred.a= predict( fit.pls2a,ncomp=5 )
+pls.pred.b= predict( fit.pls2b,ncomp=10 )
+MSEpcr2= mean((as.vector(pcr.pred)-testUni$Apps)^2) #find mean sq error
+MSEpls2.a =mean((as.vector(pls.pred.a)-testUni$Apps)^2)
+MSEpls2.b =mean((as.vector(pls.pred.b)-testUni$Apps)^2)
+
+MSEpcr2
+MSEpls2.a
+MSEpls2.b
+
+#partial least sq does better according to mse
+
+#the smallest value of MSE is principle component analysis for 17 components, then partial least squares regression for 10 components and lastly the greatest MSE was for partial least squares regression for 5 components. 
+```
+
+The test error is hard to compute as our model isn't perfect and I kept getting 0 as the number of times each model predicted exactly the number of applications in the testing data.
+
+But 1770235 was the mean squared error for principle component regression with 17 components. 1776808 was the mean squared error for partial least squares regression for 10 components. Lastly 1958681 was the mean squared error for partial least squares regression for 5 components.
+
+I think our best model depends on what we choose to prioritize. Do we care about dimensionality and want to find the most simple model with the least number of components necessary? Or do we care about predictive performance more than anything and wish that our model predicts our single testing data well.
+
+I think partial least squares regression with 10 components could be the way to go as the mean squared error doesn't differ that much from using all the components with principle component regression. We also would be using less components, this actually is good because the less components we use the model isn't as flexible as using all the components. When a model isn't as flexible the bias might not be as low as using all components, but variance is lower.
