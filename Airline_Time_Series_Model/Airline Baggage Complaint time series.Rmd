@@ -1,0 +1,221 @@
+---
+title: 'Sample Writing'
+author: "Shivani Patel"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+#####  Data Information and Introduction: 
+  The dataset I chose was the Airline Baggage Complaints data. This data set was found on Kaggle and was uploaded by Gabriel Santello on November 2023. This data gives information about baggage issues and other important airline information for three popular airlines from the year 2004 to 2010. The data was recorded monthly for each airline. The variables from the original data set I'll focus on are:
+
+-  Baggage: The total number of complaints received from passengers regarding baggage. These complaints can range from theft, late arrivals, lost or damaged goods, and misrouted luggage. 
+
+-  Airline: What airline was traveled: American Eagle, United Airlines, or Hawaiian Airlines.
+
+  In my opinion baggage issues seem to be the most frustrating so I decided to investigate that variable of the subsetted United Airline data first. The goal of this analysis is to come up with an optimal time series model that will predict how many baggage complaints United Airlines will receive using time as output. 
+  
+```{r, echo=FALSE}
+par(mfrow=c(2,1), mar=c(6,6,1,1), cex=0.5)
+
+#tinytex::reinstall_tinytex(repository = "illinois")
+current_dir <- getwd()
+csv_path <- file.path(current_dir, "baggagecomplaints.csv")
+baggage <- read.csv(csv_path)
+
+
+#baggage <- read.csv("/Users/shivanipatel/Downloads/baggagecomplaints.csv")
+
+baggageUnited <- ts(baggage[baggage$Airline=='United',]$Baggage, start=c(2004,1), end=c(2010,12), freq=12)
+
+plot(time(baggageUnited), as.factor(baggageUnited), type='o', xlab="Year", ylab="Complaints", main="Baggage Complaints for United, Per Month (2004-2010)")
+
+acf(baggageUnited,lag.max=20, main="ACF for United Baggage Complaints")
+```
+
+##### Exloratory Analysis:
+
+  One quick observation of the time series data is that there is a non-constant trend. There is a negative quadratic shape present (a curve opening downward). I observe that there is a high point at every half year. The seasonality periodicity ends almost every 6 months. This seasonality could be due traveling increases in the summer months and winter months.
+
+  It seems like 2007 was a bad year for baggage complaints in comparison to the rest of the years. After 2007 there is a steep decrease in terms of a linear trend. I assume that the airline started focusing extra on baggage to resolve issues. 
+
+  This would not be considered a stationary time series. For a series to be considered stationary there needs to be a constant mean and the autocorrelation must only depend on time through lags. There is not a constant mean (the time series is time dependent). Looking at the autocorrelation plot (ACF) the ACF lines decay quick after lag 1. Even with that ACF observation, the time series is still not stationary due to violating constant mean independent of time.
+
+Some potential transformations I can do is a log10 transformation for the Baggage Complaints variable.
+```{r , echo=FALSE}
+logBaggage <- ts(log(baggage[baggage$Airline=='United',]$Baggage), start=c(2004,1), end=c(2010,12), freq=12)
+
+par(mfrow=c(1,1), mar=c(3,3,.7,.7), cex=0.5)
+
+plot(time(logBaggage), as.factor(logBaggage), type='o', xlab="Year", ylab="Complaints", main="log10 Baggage Complaints for United, Per Month (2004-2010)")
+```
+There is still a seasonality and quadratic trend. But doing a log transformation will reduce the skewness of the response variable (Baggage Complaints) so I will consider this transformation to simplify my analysis. 
+
+##### First Analysis
+
+###### Estimating Trend and Seasonal Component (Detrending and Deseasonlizing)
+
+  The first step I will perform is take the additive model: $x_t = m_t + s_t +y_t$ where:
+
+$x_t$ is defined as the number of log10 baggage complaints for time t. I am going to assume that time is labeled as t=2004, 2004+1/12, 2004+2/12,...2010.
+
+$m_t$ is the global trend. I will assume $m_t = \beta_0 + \beta_1t + \beta_2t^2$ because the original time series plot looks like a quadratic trend. 
+
+$s_t$ is the seasonal component. I will assume $s_t = \alpha_1sin(2\pi t/d) + \alpha_2cos(2\pi t/d)$. Looking at the monthplot of logBaggage (shown in appendix) there is an indication of some seasonality present and I could argue a sinusoidal pattern is present for the averages per month. This leads me to think that a harmonic method will be useful. 
+
+$y_t$ is the mean-zero stationary component. 
+
+This guides me to my first analysis model: $x_t = \beta_0 + \beta_1t + \beta_2t^2 + \alpha_1sin(2\pi t/d) + \alpha_2cos(2\pi t/d)$ I will make d=.5 since each peak of the seasonal jump happens every half of the unit in the x interval.
+```{r , echo=FALSE}
+#modeling quadratic trend
+z1 <- time(logBaggage)
+
+z2 <- I(time(logBaggage)^2)
+
+#modeling seasonality
+z3 <- sin(2*pi*time(logBaggage)/.5)
+
+z4 <- cos(2*pi*time(logBaggage)/.5)
+
+United_FirstAnlysModel <- lm(logBaggage ~ z1+z2+z3+z4)
+United_FirstAnlysModel$coefficients
+
+m_t <- United_FirstAnlysModel$coeff[1] + United_FirstAnlysModel$coeff[2]*time(logBaggage) + United_FirstAnlysModel$coeff[3]*I(time(logBaggage)^2)
+
+s_t <- United_FirstAnlysModel$coeff[4]*sin(2*pi*time(logBaggage)/.5) + United_FirstAnlysModel$coeff[5]*cos(2*pi*time(logBaggage)/.5)
+
+
+detrended <- logBaggage-m_t-s_t
+```
+
+  Upon looking at the summary for this model I have obtained the coefficients and can evaluate the model to be: $x_t = -228600 + 227.8t - .05677t^2 - .04196\sin(2\pi t/.5) + .2171\cos(2\pi t/.5) + y_t$. I have included the plots for trend and seasonality as well as the deseasonalized and detrended plots (Time series, ACF, PACF, monthplots) in the appendix. I noticed that despite getting rid of the estimated trend and seasonality, the series is still not appearing to be fully stationary.  I need to utilize ARMA modeling for the fitting of the detrended, deseasonalized $y_t$ part. 
+
+##### ARMA model for Detrended and Deseasonalized data (3 possible models)
+
+ All of the Ljung-Box test and Residual plots are in appendix. 
+
+###### Candidate 1: ARMA(p=1, q=1). 
+
+  I observe that the detrended and deseasonalized ACF cuts off after 1, MA(1). The PACF cuts off around the same mark so I will estimate at lag 1, AR(1). Maximum Likelihood Estimation (MLE) will be the optimal way to obtain the coefficients for this ARMA model. 
+
+```{r , echo=FALSE, include=FALSE}
+library(astsa)
+detrended_mle <- sarima(detrended, p=1, d=0, q=1, details=F)
+```
+
+```{r, echo=FALSE}
+c("Coef for Candiate 1:",detrended_mle$fit$coef)
+c("Sigma^2 for Candiate 1:",detrended_mle$fit$sigma2)
+
+c("Confidence Interval for mu:",.006-1.96*.0480, .006+1.96*.0480)
+c("Aic for Canidate 1:",detrended_mle$fit$aic)
+
+ehat1 <- detrended_mle$fit$residuals
+lag.vector=1:20
+pvalues1 <-numeric(length(lag.vector))
+for(i in 1:20){
+  pvalues1[i]<-Box.test(ehat1, lag=lag.vector[i], type="Ljung")$p.value
+}
+```
+
+  I estimate $\hat{\phi}_1 = .8326$, $\hat{\theta}_1 = -.6122$ and $\hat{\mu} = .0066$. I have chose to not include the sample mean in my model as the 95% confidence interval: (-0.08800,0.10008), contains 0, therefore the mean is insignificant. The estimated model is: $y_t = .8326(y_{t-1})+w_t-.6122(w_{t+1})$  where $w_t ~ wn(0, .03864)
+  
+The aic for this model is -26.690. Using the Ljung-Box test on the residuals I notice the pvalue is incredibly small after lag 10. This gives me a reason to doubt the white noise assumption for the $w_t$ series after lag 10.
+
+###### Candidate 2: ARMA(p=1, q=0). 
+
+  This is a close neighbor to Candidate 1's ARMA model. One can also argue that the detrended ACF plot tails off MA(0). Simplified that model is AR(1). I will use the yule-walker method of moments to estimate the coefficients because for AR(p) models, the estimates are easy to compute and always exist. 
+
+```{r, echo=FALSE}
+detrended_mom <- ar(detrended, method="yw", aic=F, order.max=1)
+detrended_mom
+detrended_mom$x.mean
+par(mfrow=c(2,1), mar=c(5,5,1,1), cex=0.8)
+
+c("AIC for Candiate 2:",detrended_mom$aic)
+
+ehat2 <- detrended_mom$resid/sqrt(detrended_mom$var.pred)
+lag.vector=1:20
+pvalues2 <-numeric(length(lag.vector))
+for(i in 1:20){
+  pvalues2[i]<-Box.test(ehat2, lag=lag.vector[i], type="Ljung")$p.value
+}
+```
+  I estimate $\hat{\phi}_1 = .1968$, and $\hat{\mu} = 0$. The estimated model is: $y_t = .1968(y_{t-1})+w_t$ and $w_t$~ wn(0, .04433). The aic for this model is 1.317. Using the Ljung-Box test on the residuals I notice the pvalue is incredibly small for all lags up to 20. This gives me a reason to doubt the white noise assumption for the $w_t$ series.
+
+###### Candidate 3: ARMA(p=1, q=2).
+  This is another close neighbor I wanted to test due to how similar AR(1) and MA(1) performed. Maximum Likelihood Estimation (MLE) will again be the optimal way to obtain the coefficients for this ARMA model.
+
+```{r , echo=FALSE, include=FALSE}
+detrended_mle2 <- sarima(detrended, p=1, d=0, q=2, details=F)
+```
+
+```{r, echo=FALSE}
+c("Coef for Candiate 3:",detrended_mle2$fit$coef)
+c("Sigma^2 for Candiate 3:", detrended_mle2$fit$sigma2)
+c("Confidence Interval for mu:", .0050-1.96*.0499, .0050+1.96*.0499 )
+
+
+c("AIC for Candiate 3:", detrended_mle2$fit$aic)
+
+ehat4 <- detrended_mle2$fit$residuals
+lag.vector=1:20
+pvalues4 <-numeric(length(lag.vector))
+for(i in 1:20){
+  pvalues4[i]<-Box.test(ehat4, lag=lag.vector[i], type="Ljung")$p.value
+}
+```
+
+  I estimate $\hat{\phi}_1 = .7797$, $\hat{\theta}_1 = -.7832$ $\hat{\theta}_2=.3451$ and $\hat{\mu} = .0050$. The 95% confidence interval for the mean in this model does contain 0 (-0.092804,0.102804), therefore it is not significant enough to include in my model. The estimated model is: $y_t = .7797(y_{t-1})+w_t-.7832(w_{t+1})+.3451(w_{t-2})$  where $w_t ~ wn(0, 0.03458)$. The aic for this model is -33.649. Using the Ljung-Box test on the residuals I notice the pvalue is small only after lag 13. Before lag 13 the pvalues are significantly large. If we are testing at an $\alpha$=.05, this candidate is the closest to the least amount of doubt of the white noise assumption for the $w_t$ series.
+
+
+##### Final Model Fitted
+
+  Finally, the model I chose to fit the detrended and deseasonalized time series was ARMA(1,2). The diagnostic plots of the residuals (shown in the appendix) show a less apparent pattern or trend compared to the other candidates. The results of the Ljung-Box test (also shown in the appendix) show that ARMA(1,2) had significantly large pvalues up to lag 13, whereas the other candidates mostly had small pvalues. The Ljung-Box tests the null hypothesis that $w_t$, or the residuals, are uncorrelated. The null hypothesis meets the assumption of the white noise. The alternate hypothesis is that the residuals are not uncorrelated.The aic for this model was also the smallest of rest of the models. This means the model performed the best. 
+
+The full estimated model for United Baggage Complaints is: $x_t = -228600 + 227.8t - .05677t^2 - .04196\sin(2\pi t/.5) + .2171\cos(2\pi t/.5) + y_t$, $y_t=.7797(y_{t-1})+w_t-.7832(w_{t+1})+.3451(w_{t-2})$, $w_t$~iid wn(0, 0.03458)
+
+##### Forecast Out Several Periods (8 months)
+
+I will forecast the next 8 months of 2011
+```{r, echo=FALSE}
+m=8
+n=length(logBaggage)
+
+#change from sarima to arima so can use output for forecasting
+detrended_mle2 <- arima(detrended, order=c(1,0,2))
+
+#for the Forecast trend and seasonal need to create time t vector that contains the next 8 values for input
+
+upcoming_time <- seq(max(z1) + 1, max(z1)+8, by=1) #count 8 new times
+upcoming_z1 <- upcoming_time
+upcoming_z2 <- I((upcoming_time)^2)
+upcoming_z3 <- sin(2*pi*upcoming_time/.5)
+upcoming_z4 <- cos(2*pi*upcoming_time/.5)
+
+pr_t <- data.frame(z1=upcoming_z1, z2=upcoming_z2, z3=upcoming_z3, z4=upcoming_z4)
+
+Forecast.trend_seasonal <- predict(United_FirstAnlysModel, pr_t)
+
+Forecast_detrended_deaseasonal <- predict(detrended_mle2, n.ahead=m)
+
+ForecastFinal <- Forecast.trend_seasonal + Forecast_detrended_deaseasonal$pred
+
+lowerPredictionBound <- numeric(length(ForecastFinal))
+upperPredictionBound <- numeric(length(ForecastFinal))
+for(i in 1:8){
+  lowerPredictionBound[i] <- Forecast_detrended_deaseasonal$pred[i] - Forecast_detrended_deaseasonal$se[i] + ForecastFinal[i]
+  upperPredictionBound[i] <- Forecast_detrended_deaseasonal$pred[i] + Forecast_detrended_deaseasonal$se[i] + ForecastFinal[i]
+}
+
+forecast_matrix <- cbind(ForecastFinal, lowerPredictionBound, upperPredictionBound)
+
+forecast_matrix
+
+
+
+
+
+
+```
+
+The next forcasted 8 months log10 Baggage Complaints United will have is labeled above as ForecastFinal. The prediction interval lower and upper bounds for each forecast are also printed above in the forecast matrix for each 8 months. 
